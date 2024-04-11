@@ -20,6 +20,10 @@ type config struct {
 	Method   string
 	Thread   int
 	SaveFile string
+	// unused
+	KeyWord        string
+	FollowRedirect bool
+	maxtime        int
 }
 
 func webfuzz(Config config) {
@@ -38,7 +42,13 @@ func webfuzz(Config config) {
 	sem := make(chan struct{}, Config.Thread)
 
 	for scanner.Scan() {
-		url := Config.Target + "/" + scanner.Text()
+		var url = ""
+
+		if strings.HasPrefix(scanner.Text(), "/") {
+			url = Config.Target + scanner.Text()
+		} else {
+			url = Config.Target + "/" + scanner.Text()
+		}
 
 		sem <- struct{}{} // max goroutine
 
@@ -54,7 +64,7 @@ func webfuzz(Config config) {
 			delay := time.Duration(Config.Delay) * time.Second
 			time.Sleep(delay)
 
-			statusCode, err := getStatusCode(url, Config.Method)
+			statusCode, err := getStatusCode(url, Config.Method, Config.FollowRedirect)
 			if err != nil {
 				fmt.Println("Error sending request:", err)
 				return
@@ -79,16 +89,24 @@ func webfuzz(Config config) {
 	}
 }
 
-func getStatusCode(url string, method string) (int, error) {
-	var resp *http.Response
-	var err error
+func getStatusCode(url string, method string, FollowRedirect bool) (int, error) {
 
-	if method == "GET" {
-		resp, err = http.Get(url)
-	} else {
-		resp, err = http.Post(url, "", nil)
+	client := &http.Client{
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !FollowRedirect {
+				return http.ErrUseLastResponse
+			}
+			return nil
+		},
+		Timeout: time.Second * 10,
 	}
 
+	req, err := http.NewRequest(method, url, nil)
+	if err != nil {
+		return 0, err
+	}
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
@@ -143,6 +161,7 @@ func main() {
 	flag.StringVar(&Config.Method, "m", "GET", "GET or POST")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
 	flag.StringVar(&Config.SaveFile, "s", "None", "Save in output file.")
+	flag.BoolVar(&Config.FollowRedirect, "r", false, "Follow redirect url.")
 
 	flag.Parse()
 
@@ -159,6 +178,8 @@ func main() {
 	info := "\033[1;96m[+]\033[0m"
 
 	fmt.Println(info, "Delay in seconds:", Config.Delay)
+	fmt.Println(info, "Thread:", Config.Thread)
+	fmt.Println(info, "Follow redirect:", Config.FollowRedirect)
 	fmt.Println(info, "Wordlist:", Config.filename)
 	fmt.Println(info, "Url Target:", Config.Target+"\n")
 
