@@ -69,14 +69,15 @@ func webfuzz(Config config) {
 				fmt.Println("Error sending request:", err)
 				return
 			}
+			if statusCode == 0 {
+				return
+			}
 
-			if statusCode == 200 {
-				total_found++
-				fmt.Println("\033[1;92m[+]\033[0m", url, statusCode)
-				data := fmt.Sprintf("%s %d", url, statusCode)
-				if Config.SaveFile != "None" {
-					writereport(Config.SaveFile, data)
-				}
+			total_found++
+			fmt.Println("\033[1;92m[+]\033[0m", url, statusCode)
+			data := fmt.Sprintf("%s %d", url, statusCode)
+			if Config.SaveFile != "None" {
+				writereport(Config.SaveFile, data)
 			}
 		}(url)
 	}
@@ -90,13 +91,16 @@ func webfuzz(Config config) {
 }
 
 func getStatusCode(url string, method string, FollowRedirect bool) (int, error) {
-
+	List_status := map[int]bool{
+		200: true,
+	}
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if !FollowRedirect {
 				return http.ErrUseLastResponse
+			} else {
+				return nil
 			}
-			return nil
 		},
 		Timeout: time.Second * 10,
 	}
@@ -113,8 +117,11 @@ func getStatusCode(url string, method string, FollowRedirect bool) (int, error) 
 	defer resp.Body.Close()
 
 	statusCode := resp.StatusCode
+	if _, ok := List_status[statusCode]; ok {
+		return statusCode, nil
+	}
+	return 0, nil
 
-	return statusCode, nil
 }
 
 func writereport(filepath string, data string) {
