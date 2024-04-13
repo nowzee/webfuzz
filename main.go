@@ -20,10 +20,9 @@ type config struct {
 	Method   string
 	Thread   int
 	SaveFile string
+	maxtime  int
 	// unused
-	KeyWord        string
-	FollowRedirect bool
-	maxtime        int
+	KeyWord string
 }
 
 func webfuzz(Config config) {
@@ -64,9 +63,8 @@ func webfuzz(Config config) {
 			delay := time.Duration(Config.Delay) * time.Second
 			time.Sleep(delay)
 
-			statusCode, err := getStatusCode(url, Config.Method, Config.FollowRedirect)
+			statusCode, err := getStatusCode(url, Config.Method)
 			if err != nil {
-				fmt.Println("Error sending request:", err)
 				return
 			}
 			if statusCode == 0 {
@@ -90,30 +88,17 @@ func webfuzz(Config config) {
 	}
 }
 
-func getStatusCode(url string, method string, FollowRedirect bool) (int, error) {
+func getStatusCode(url string, method string) (int, error) {
 	List_status := map[int]bool{
 		200: true,
-	}
-	client := &http.Client{
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if !FollowRedirect {
-				return http.ErrUseLastResponse
-			} else {
-				return nil
-			}
-		},
-		Timeout: time.Second * 10,
+		301: true,
 	}
 
-	req, err := http.NewRequest(method, url, nil)
+	resp, err := http.Get(url)
 	if err != nil {
 		return 0, err
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return 0, err
-	}
 	defer resp.Body.Close()
 
 	statusCode := resp.StatusCode
@@ -151,6 +136,8 @@ func writereport(filepath string, data string) {
 }
 
 func main() {
+	var Config config
+
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
@@ -159,7 +146,14 @@ func main() {
 		os.Exit(0)
 	}()
 
-	var Config config
+	go func() {
+		if Config.maxtime != 0 {
+			delay := time.Duration(Config.maxtime) * time.Second
+			time.Sleep(delay)
+			fmt.Println("\nExisting")
+			os.Exit(0)
+		}
+	}()
 
 	// command
 	flag.StringVar(&Config.filename, "f", "default", "filename")
@@ -168,7 +162,7 @@ func main() {
 	flag.StringVar(&Config.Method, "m", "GET", "GET or POST")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
 	flag.StringVar(&Config.SaveFile, "s", "None", "Save in output file.")
-	flag.BoolVar(&Config.FollowRedirect, "r", false, "Follow redirect url.")
+	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
 
 	flag.Parse()
 
@@ -186,7 +180,6 @@ func main() {
 
 	fmt.Println(info, "Delay in seconds:", Config.Delay)
 	fmt.Println(info, "Thread:", Config.Thread)
-	fmt.Println(info, "Follow redirect:", Config.FollowRedirect)
 	fmt.Println(info, "Wordlist:", Config.filename)
 	fmt.Println(info, "Url Target:", Config.Target+"\n")
 
