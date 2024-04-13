@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"text/tabwriter"
 	"time"
 )
 
@@ -45,9 +46,18 @@ func webfuzz(Config config) {
 		var url = ""
 
 		if strings.HasPrefix(scanner.Text(), "/") {
-			url = Config.Target + scanner.Text()
+			if strings.HasSuffix(Config.Target, "/") {
+				r := strings.TrimPrefix(scanner.Text(), "/")
+				url = Config.Target + r
+			} else {
+				url = Config.Target + scanner.Text()
+			}
 		} else {
-			url = Config.Target + "/" + scanner.Text()
+			if strings.HasSuffix(Config.Target, "/") {
+				url = Config.Target + scanner.Text()
+			} else {
+				url = Config.Target + "/" + scanner.Text()
+			}
 		}
 
 		sem <- struct{}{} // max goroutine
@@ -73,10 +83,16 @@ func webfuzz(Config config) {
 			}
 
 			total_found++
+
 			info := "\033[1;92m[+]\033[0m"
-			fmt.Printf("[Code: %d  Lenght-body: %d]", statusCode, body)
-			fmt.Printf("\n%s %s\n", info, url)
-			data := fmt.Sprintf("%s [%d || %d]", url, statusCode, body)
+
+			data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url, statusCode, body)
+			w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
+
+			fmt.Fprintf(w, "%s %-40s [Code: %d] [Size: %d]\n", info, url, statusCode, body)
+
+			w.Flush()
+
 			if Config.SaveFile != "None" {
 				writereport(Config.SaveFile, data)
 			}
@@ -196,6 +212,7 @@ func main() {
 	info := "\033[1;96m[+]\033[0m"
 
 	fmt.Println(info, "Delay in seconds:", Config.Delay)
+	fmt.Println(info, "Exclude Lenght :", Config.lenghtbody)
 	fmt.Println(info, "Thread:", Config.Thread)
 	fmt.Println(info, "Wordlist:", Config.filename)
 	fmt.Println(info, "Url Target:", Config.Target+"\n")
