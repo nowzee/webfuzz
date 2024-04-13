@@ -11,7 +11,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"text/tabwriter"
 	"time"
 )
 
@@ -87,11 +86,8 @@ func webfuzz(Config config) {
 			info := "\033[1;92m[+]\033[0m"
 
 			data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url, statusCode, body)
-			w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', tabwriter.Debug)
 
-			fmt.Fprintf(w, "%s %-40s [Code: %d] [Size: %d]\n", info, url, statusCode, body)
-
-			w.Flush()
+			fmt.Printf("%s %-40s [Code: %d] [Size: %d]\n", info, url, statusCode, body)
 
 			if Config.SaveFile != "None" {
 				writereport(Config.SaveFile, data)
