@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"os/signal"
@@ -17,12 +18,12 @@ type config struct {
 	filename string
 	Target   string
 	Delay    int
-	Method   string
 	Thread   int
 	SaveFile string
 	maxtime  int
 	// unused
-	KeyWord string
+	KeyWord    string
+	lenghtbody int
 }
 
 func webfuzz(Config config) {
@@ -63,7 +64,7 @@ func webfuzz(Config config) {
 			delay := time.Duration(Config.Delay) * time.Second
 			time.Sleep(delay)
 
-			statusCode, err := getStatusCode(url, Config.Method)
+			statusCode, body, err := getStatusCode(url, Config)
 			if err != nil {
 				return
 			}
@@ -72,8 +73,10 @@ func webfuzz(Config config) {
 			}
 
 			total_found++
-			fmt.Println("\033[1;92m[+]\033[0m", url, statusCode)
-			data := fmt.Sprintf("%s %d", url, statusCode)
+			info := "\033[1;92m[+]\033[0m"
+			fmt.Printf("[Code: %d  Lenght-body: %d]", statusCode, body)
+			fmt.Printf("\n%s %s\n", info, url)
+			data := fmt.Sprintf("%s [%d || %d]", url, statusCode, body)
 			if Config.SaveFile != "None" {
 				writereport(Config.SaveFile, data)
 			}
@@ -88,7 +91,7 @@ func webfuzz(Config config) {
 	}
 }
 
-func getStatusCode(url string, method string) (int, error) {
+func getStatusCode(url string, Config config) (int, int, error) {
 	List_status := map[int]bool{
 		200: true,
 		301: true,
@@ -96,16 +99,30 @@ func getStatusCode(url string, method string) (int, error) {
 
 	resp, err := http.Get(url)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
 
 	defer resp.Body.Close()
 
 	statusCode := resp.StatusCode
 	if _, ok := List_status[statusCode]; ok {
-		return statusCode, nil
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, 0, nil
+		}
+
+		if Config.lenghtbody != 0 {
+			if Config.lenghtbody != len(body) {
+				return statusCode, len(body), nil
+			}
+
+		} else {
+			return statusCode, len(body), nil
+		}
+
 	}
-	return 0, nil
+	return 0, 0, nil
 
 }
 
@@ -159,10 +176,10 @@ func main() {
 	flag.StringVar(&Config.filename, "f", "default", "filename")
 	flag.StringVar(&Config.Target, "target", "default", "url_target")
 	flag.IntVar(&Config.Delay, "d", 0, "Enter the delay in seconds")
-	flag.StringVar(&Config.Method, "m", "GET", "GET or POST")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
-	flag.StringVar(&Config.SaveFile, "s", "None", "Save in output file.")
+	flag.StringVar(&Config.SaveFile, "o", "None", "Save in output file.")
 	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
+	flag.IntVar(&Config.lenghtbody, "exclude-lenght", 0, "Exclude lenght")
 
 	flag.Parse()
 
