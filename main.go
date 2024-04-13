@@ -15,15 +15,15 @@ import (
 )
 
 type config struct {
-	filename string
-	Target   string
-	Delay    int
-	Thread   int
-	SaveFile string
-	maxtime  int
-	// unused
-	KeyWord    string
+	filename   string
+	Target     string
+	Delay      int
+	Thread     int
+	SaveFile   string
+	maxtime    int
 	lenghtbody int
+	// unused
+	KeyWord string
 }
 
 func webfuzz(Config config) {
@@ -70,7 +70,7 @@ func webfuzz(Config config) {
 				wg.Done()
 			}()
 
-			delay := time.Duration(Config.Delay) * time.Second
+			delay := time.Duration(Config.Delay) * time.Millisecond
 			time.Sleep(delay)
 
 			statusCode, body, err := getStatusCode(url, Config)
@@ -187,7 +187,7 @@ func main() {
 	// command
 	flag.StringVar(&Config.filename, "f", "default", "filename")
 	flag.StringVar(&Config.Target, "target", "default", "url_target")
-	flag.IntVar(&Config.Delay, "d", 0, "Enter the delay in seconds")
+	flag.IntVar(&Config.Delay, "d", 0, "Enter the delay in Millisecond")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
 	flag.StringVar(&Config.SaveFile, "o", "None", "Save in output file.")
 	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
@@ -200,14 +200,14 @@ func main() {
 		return
 	}
 	if Config.Target == "default" {
-		fmt.Println("Usage: go run main.go -target <https://exemple.com>")
+		fmt.Println("Usage: go run main.go -target <https://example.com>")
 		return
 	}
 
 	// info config
 	info := "\033[1;96m[+]\033[0m"
 
-	fmt.Println(info, "Delay in seconds:", Config.Delay)
+	fmt.Println(info, "Delay in Millisecond:", Config.Delay)
 	fmt.Println(info, "Exclude Lenght :", Config.lenghtbody)
 	fmt.Println(info, "Thread:", Config.Thread)
 	fmt.Println(info, "Wordlist:", Config.filename)
