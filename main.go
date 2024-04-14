@@ -30,7 +30,11 @@ type config struct {
 
 var List_status = map[int]bool{
 	200: true,
+	204: true,
 	301: true,
+	302: true,
+	307: true,
+	401: true,
 	500: true,
 }
 
