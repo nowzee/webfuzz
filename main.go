@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,7 +24,14 @@ type config struct {
 	maxtime    int
 	lenghtbody int
 	// unused
-	KeyWord string
+	KeyWord     string
+	Status_Code string
+}
+
+var List_status = map[int]bool{
+	200: true,
+	301: true,
+	500: true,
 }
 
 func webfuzz(Config config) {
@@ -104,11 +112,6 @@ func webfuzz(Config config) {
 }
 
 func getStatusCode(url string, Config config) (int, int, error) {
-	List_status := map[int]bool{
-		200: true,
-		301: true,
-		500: true,
-	}
 
 	resp, err := http.Get(url)
 	if err != nil {
@@ -191,6 +194,7 @@ func main() {
 	flag.StringVar(&Config.SaveFile, "o", "None", "Save in output file.")
 	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
 	flag.IntVar(&Config.lenghtbody, "exclude-lenght", 0, "Exclude lenght")
+	flag.StringVar(&Config.Status_Code, "X", "None", "Exclude status code with separator ;")
 
 	flag.Parse()
 
@@ -201,6 +205,21 @@ func main() {
 	if Config.Target == "default" {
 		fmt.Println("Usage: go run main.go -target <https://example.com>")
 		return
+	}
+	if Config.Status_Code != "None" {
+		s := Config.Status_Code
+		arr := strings.Split(s, ";")
+
+		for _, valueStr := range arr {
+			intValue, err := strconv.Atoi(valueStr)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			List_status[intValue] = false
+		}
+
 	}
 
 	// info config
