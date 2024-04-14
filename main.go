@@ -99,7 +99,7 @@ func webfuzz(Config config) {
 
 	fmt.Println("\nTotal found:", total_found)
 	if Config.SaveFile != "None" {
-		fmt.Fprintln(os.Stdout, []any{"File saved has:", Config.SaveFile}...)
+		fmt.Fprintln(os.Stdout, []any{"\033[1;96m[+]\033[0m", "File saved has:", Config.SaveFile}...)
 	}
 }
 
@@ -107,6 +107,7 @@ func getStatusCode(url string, Config config) (int, int, error) {
 	List_status := map[int]bool{
 		200: true,
 		301: true,
+		500: true,
 	}
 
 	resp, err := http.Get(url)
@@ -115,10 +116,8 @@ func getStatusCode(url string, Config config) (int, int, error) {
 	}
 
 	defer resp.Body.Close()
-
 	statusCode := resp.StatusCode
-	if _, ok := List_status[statusCode]; ok {
-
+	if List_status[statusCode] {
 		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return 0, 0, nil
@@ -208,6 +207,7 @@ func main() {
 	info := "\033[1;96m[+]\033[0m"
 
 	fmt.Println(info, "Delay in Millisecond:", Config.Delay)
+	fmt.Println(info, "Max time to fuzz in second:", Config.maxtime)
 	fmt.Println(info, "Exclude Lenght :", Config.lenghtbody)
 	fmt.Println(info, "Thread:", Config.Thread)
 	fmt.Println(info, "Wordlist:", Config.filename)
