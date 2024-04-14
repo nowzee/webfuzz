@@ -16,16 +16,16 @@ import (
 )
 
 type config struct {
-	filename   string
-	Target     string
-	Delay      int
-	Thread     int
-	SaveFile   string
-	maxtime    int
-	lenghtbody int
-	// unused
-	KeyWord     string
+	filename    string
+	Target      string
+	Delay       int
+	Thread      int
+	SaveFile    string
+	maxtime     int
+	lenghtbody  int
 	Status_Code string
+	// unused
+	KeyWord string
 }
 
 var List_status = map[int]bool{
