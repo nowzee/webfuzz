@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -25,7 +26,8 @@ type config struct {
 	lenghtbody  int
 	Status_Code string
 	// unused
-	KeyWord string
+	SubDomaine bool
+	KeyWord    string
 }
 
 var List_status = map[int]bool{
@@ -54,20 +56,40 @@ func webfuzz(Config config) {
 	sem := make(chan struct{}, Config.Thread)
 
 	for scanner.Scan() {
-		var url = ""
-
-		if strings.HasPrefix(scanner.Text(), "/") {
-			if strings.HasSuffix(Config.Target, "/") {
-				r := strings.TrimPrefix(scanner.Text(), "/")
-				url = Config.Target + r
-			} else {
-				url = Config.Target + scanner.Text()
+		var url2 = ""
+		if Config.SubDomaine {
+			parsedURL, err := url.Parse(Config.Target)
+			if err != nil {
+				fmt.Println(err)
+				return
 			}
-		} else {
-			if strings.HasSuffix(Config.Target, "/") {
-				url = Config.Target + scanner.Text()
+
+			parts := strings.Split(parsedURL.Host, ".")
+			var finalHost string
+			if len(parts) > 2 {
+				parts[0] = scanner.Text()
+				finalHost = strings.Join(parts, ".")
 			} else {
-				url = Config.Target + "/" + scanner.Text()
+				finalHost = scanner.Text() + "." + parsedURL.Host
+			}
+
+			parsedURL.Host = finalHost
+
+			url2 = parsedURL.String()
+		} else {
+			if strings.HasPrefix(scanner.Text(), "/") {
+				if strings.HasSuffix(Config.Target, "/") {
+					r := strings.TrimPrefix(scanner.Text(), "/")
+					url2 = Config.Target + r
+				} else {
+					url2 = Config.Target + scanner.Text()
+				}
+			} else {
+				if strings.HasSuffix(Config.Target, "/") {
+					url2 = Config.Target + scanner.Text()
+				} else {
+					url2 = Config.Target + "/" + scanner.Text()
+				}
 			}
 		}
 
@@ -104,7 +126,7 @@ func webfuzz(Config config) {
 			if Config.SaveFile != "None" {
 				writereport(Config.SaveFile, data)
 			}
-		}(url)
+		}(url2)
 	}
 
 	wg.Wait() // wait of all goroutine
@@ -199,6 +221,7 @@ func main() {
 	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
 	flag.IntVar(&Config.lenghtbody, "exclude-lenght", 0, "Exclude lenght")
 	flag.StringVar(&Config.Status_Code, "X", "None", "Exclude status code with separator ;")
+	flag.BoolVar(&Config.SubDomaine, "sub", false, "fuzz subdomain of the website")
 
 	flag.Parse()
 
