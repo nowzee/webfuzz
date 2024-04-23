@@ -57,6 +57,7 @@ func webfuzz(Config config) {
 
 	for scanner.Scan() {
 		var url2 = ""
+		var url3 = ""
 		if Config.SubDomaine {
 			parsedURL, err := url.Parse(Config.Target)
 			if err != nil {
@@ -76,6 +77,7 @@ func webfuzz(Config config) {
 			parsedURL.Host = finalHost
 
 			url2 = parsedURL.String()
+			url3 = scanner.Text()
 		} else {
 			if strings.HasPrefix(scanner.Text(), "/") {
 				if strings.HasSuffix(Config.Target, "/") {
@@ -91,13 +93,14 @@ func webfuzz(Config config) {
 					url2 = Config.Target + "/" + scanner.Text()
 				}
 			}
+			url3 = scanner.Text()
 		}
 
 		sem <- struct{}{} // max goroutine
 
 		wg.Add(1)
 
-		go func(url string) {
+		go func(url string, url3 string) {
 			defer func() {
 				// exit of the canal
 				<-sem
@@ -119,14 +122,14 @@ func webfuzz(Config config) {
 
 			info := "\033[1;92m[+]\033[0m"
 
-			data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url, statusCode, body)
+			data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url3, statusCode, body)
 
-			fmt.Printf("%s %-40s [Code: %d] [Size: %d]\n", info, url, statusCode, body)
+			fmt.Printf("%s %-40s [Code: %d] [Size: %d]\n", info, url3, statusCode, body)
 
 			if Config.SaveFile != "None" {
 				writereport(Config.SaveFile, data)
 			}
-		}(url2)
+		}(url2, url3)
 	}
 
 	wg.Wait() // wait of all goroutine
