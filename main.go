@@ -25,9 +25,10 @@ type config struct {
 	maxtime     int
 	lenghtbody  int
 	Status_Code string
+	SubDomaine  bool
+	Extension   string
 	// unused
-	SubDomaine bool
-	KeyWord    string
+	KeyWord string
 }
 
 var List_status = map[int]bool{
@@ -39,6 +40,8 @@ var List_status = map[int]bool{
 	401: true,
 	500: true,
 }
+
+var List_extension = map[string]bool{}
 
 func webfuzz(Config config) {
 	var wg sync.WaitGroup
@@ -58,6 +61,17 @@ func webfuzz(Config config) {
 	for scanner.Scan() {
 		var url2 = ""
 		var url3 = ""
+
+		if Config.Extension != "None" {
+			suffix := ""
+			parts := strings.Split(scanner.Text(), ".")
+			if len(parts) > 1 {
+				suffix = parts[len(parts)-1]
+			}
+			if !List_extension[suffix] {
+				continue
+			}
+		}
 		if Config.SubDomaine {
 			parsedURL, err := url.Parse(Config.Target)
 			if err != nil {
@@ -223,8 +237,9 @@ func main() {
 	flag.StringVar(&Config.SaveFile, "o", "None", "Save in output file.")
 	flag.IntVar(&Config.maxtime, "time", 0, "Max time to fuzz in seconds")
 	flag.IntVar(&Config.lenghtbody, "exclude-lenght", 0, "Exclude lenght")
-	flag.StringVar(&Config.Status_Code, "X", "None", "Exclude status code with separator ;")
-	flag.BoolVar(&Config.SubDomaine, "sub", false, "fuzz subdomain of the website")
+	flag.StringVar(&Config.Status_Code, "X", "None", "Exclude status code with separator ,")
+	flag.BoolVar(&Config.SubDomaine, "sub", false, "Mode to fuzz subdomain of the website")
+	flag.StringVar(&Config.Extension, "extension", "None", "Specify extension php,txt,html ect.. with separator ,")
 
 	flag.Parse()
 
@@ -238,7 +253,7 @@ func main() {
 	}
 	if Config.Status_Code != "None" {
 		s := Config.Status_Code
-		arr := strings.Split(s, ";")
+		arr := strings.Split(s, ",")
 
 		for _, valueStr := range arr {
 			intValue, err := strconv.Atoi(valueStr)
@@ -250,6 +265,16 @@ func main() {
 			List_status[intValue] = false
 		}
 
+	}
+	if Config.Extension != "None" {
+		s := Config.Extension
+		arr := strings.Split(s, ",")
+		for _, valueStr := range arr {
+			stringvalue := valueStr
+
+			List_extension[stringvalue] = true
+			fmt.Println(List_extension)
+		}
 	}
 
 	// info config
