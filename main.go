@@ -230,7 +230,7 @@ func main() {
 	}()
 
 	// command
-	flag.StringVar(&Config.filename, "f", "default", "filename")
+	flag.StringVar(&Config.filename, "f", "default", "Select a wordlist")
 	flag.StringVar(&Config.Target, "target", "default", "url_target")
 	flag.IntVar(&Config.Delay, "d", 0, "Enter the delay in Millisecond")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
