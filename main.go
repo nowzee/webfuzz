@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"io"
@@ -43,120 +44,15 @@ var List_status = map[int]bool{
 
 var List_extension = map[string]bool{}
 
-func webfuzz(Config config) {
-	var wg sync.WaitGroup
-	total_found := 0
-
-	file, err := os.Open(Config.filename)
-	if err != nil {
-		fmt.Println("filepath not valid:", err)
-		os.Exit(1)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-
-	sem := make(chan struct{}, Config.Thread)
-
-	for scanner.Scan() {
-		var url2 = ""
-		var url3 = ""
-
-		if Config.Extension != "None" {
-			suffix := ""
-			parts := strings.Split(scanner.Text(), ".")
-			if len(parts) > 1 {
-				suffix = parts[len(parts)-1]
-			}
-			if !List_extension[suffix] {
-				continue
-			}
-		}
-		if Config.SubDomaine {
-			parsedURL, err := url.Parse(Config.Target)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			parts := strings.Split(parsedURL.Host, ".")
-			var finalHost string
-			if len(parts) > 2 {
-				parts[0] = scanner.Text()
-				finalHost = strings.Join(parts, ".")
-			} else {
-				finalHost = scanner.Text() + "." + parsedURL.Host
-			}
-
-			parsedURL.Host = finalHost
-
-			url2 = parsedURL.String()
-			url3 = scanner.Text()
-		} else {
-			if strings.HasPrefix(scanner.Text(), "/") {
-				if strings.HasSuffix(Config.Target, "/") {
-					r := strings.TrimPrefix(scanner.Text(), "/")
-					url2 = Config.Target + r
-				} else {
-					url2 = Config.Target + scanner.Text()
-				}
-			} else {
-				if strings.HasSuffix(Config.Target, "/") {
-					url2 = Config.Target + scanner.Text()
-				} else {
-					url2 = Config.Target + "/" + scanner.Text()
-				}
-			}
-			url3 = scanner.Text()
-		}
-
-		sem <- struct{}{} // max goroutine
-
-		wg.Add(1)
-
-		go func(url string, url3 string) {
-			defer func() {
-				// exit of the canal
-				<-sem
-				wg.Done()
-			}()
-
-			delay := time.Duration(Config.Delay) * time.Millisecond
-			time.Sleep(delay)
-
-			statusCode, body, err := getStatusCode(url, Config)
-			if err != nil {
-				return
-			}
-			if statusCode == 0 {
-				return
-			}
-
-			total_found++
-
-			info := "\033[1;92m[+]\033[0m"
-
-			data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url3, statusCode, body)
-
-			fmt.Printf("%s %-40s [Code: %d] [Size: %d]\n", info, url3, statusCode, body)
-
-			if Config.SaveFile != "None" {
-				writereport(Config.SaveFile, data)
-			}
-		}(url2, url3)
-	}
-
-	wg.Wait() // wait of all goroutine
-
-	fmt.Println("\nTotal found:", total_found)
-	if Config.SaveFile != "None" {
-		fmt.Fprintln(os.Stdout, []any{"\033[1;96m[+]\033[0m", "File saved has:", Config.SaveFile}...)
-	}
-}
-
 func getStatusCode(url string, Config config) (int, int, error) {
 
-	resp, err := http.Get(url)
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+	}
+
+	resp, err := client.Get(url)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -181,6 +77,139 @@ func getStatusCode(url string, Config config) (int, int, error) {
 	}
 	return 0, 0, nil
 
+}
+
+func processURL(url string, url3 string, Config config, sem chan struct{}, wg *sync.WaitGroup, total_found *int) {
+	defer func() {
+		// exit of the canal
+		<-sem
+		wg.Done()
+	}()
+
+	delay := time.Duration(Config.Delay) * time.Millisecond
+	time.Sleep(delay)
+
+	statusCode, body, err := getStatusCode(url, Config)
+	if err != nil {
+		return
+	}
+	if statusCode == 0 {
+		return
+	}
+
+	*total_found++
+
+	info := "\033[1;92m[+]\033[0m"
+
+	data := fmt.Sprintf("%-40s [Code: %d] || [Size: %d]", url3, statusCode, body)
+
+	fmt.Printf("%s %-40s [Code: %d] [Size: %d]\n", info, url3, statusCode, body)
+
+	if Config.SaveFile != "None" {
+		writereport(Config.SaveFile, data)
+	}
+}
+
+func webfuzz(Config config) {
+	var wg sync.WaitGroup
+	total_found := 0
+
+	file, err := os.Open(Config.filename)
+	if err != nil {
+		fmt.Println("filepath not valid:", err)
+		os.Exit(1)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+
+	sem := make(chan struct{}, Config.Thread)
+
+	for scanner.Scan() {
+		var url2 = ""
+		var url3 = ""
+
+		if Config.SubDomaine {
+			parsedURL, err := url.Parse(Config.Target)
+			if err != nil {
+				fmt.Println(err)
+				return
+			}
+
+			parts := strings.Split(parsedURL.Host, ".")
+			var finalHost string
+			if len(parts) > 2 {
+				parts[0] = scanner.Text()
+				finalHost = strings.Join(parts, ".")
+			} else {
+				finalHost = scanner.Text() + "." + parsedURL.Host
+			}
+
+			parsedURL.Host = finalHost
+
+			url2 = parsedURL.String()
+			url3 = scanner.Text()
+			sem <- struct{}{} // max goroutine
+
+			wg.Add(1)
+
+			go processURL(url2, url3, Config, sem, &wg, &total_found)
+		} else if Config.Extension != "None" {
+			for extension := range List_extension {
+				var re = ""
+				re = scanner.Text() + "." + extension
+
+				if strings.HasPrefix(re, "/") {
+					if strings.HasSuffix(Config.Target, "/") {
+						r := strings.TrimPrefix(re, "/")
+						url2 = Config.Target + r
+					} else {
+						url2 = Config.Target + re
+					}
+				} else {
+					if strings.HasSuffix(Config.Target, "/") {
+						url2 = Config.Target + re
+					} else {
+						url2 = Config.Target + "/" + re
+					}
+				}
+				url3 = re
+				sem <- struct{}{} // max goroutine
+
+				wg.Add(1)
+
+				go processURL(url2, url3, Config, sem, &wg, &total_found)
+			}
+		} else {
+			if strings.HasPrefix(scanner.Text(), "/") {
+				if strings.HasSuffix(Config.Target, "/") {
+					r := strings.TrimPrefix(scanner.Text(), "/")
+					url2 = Config.Target + r
+				} else {
+					url2 = Config.Target + scanner.Text()
+				}
+			} else {
+				if strings.HasSuffix(Config.Target, "/") {
+					url2 = Config.Target + scanner.Text()
+				} else {
+					url2 = Config.Target + "/" + scanner.Text()
+				}
+			}
+			url3 = scanner.Text()
+			sem <- struct{}{} // max goroutine
+
+			wg.Add(1)
+
+			go processURL(url2, url3, Config, sem, &wg, &total_found)
+		}
+	}
+
+	wg.Wait() // wait of all goroutine
+
+	fmt.Println("\nTotal found:", total_found)
+	if Config.SaveFile != "None" {
+		fmt.Fprintln(os.Stdout, []any{"\033[1;96m[+]\033[0m", "File saved has:", Config.SaveFile}...)
+	}
 }
 
 func writereport(filepath string, data string) {
@@ -230,7 +259,7 @@ func main() {
 	}()
 
 	// command
-	flag.StringVar(&Config.filename, "f", "default", "Select a wordlist")
+	flag.StringVar(&Config.filename, "f", "default", "filename")
 	flag.StringVar(&Config.Target, "target", "default", "url_target")
 	flag.IntVar(&Config.Delay, "d", 0, "Enter the delay in Millisecond")
 	flag.IntVar(&Config.Thread, "t", 10, "Enter the number of thread.")
@@ -273,7 +302,6 @@ func main() {
 			stringvalue := valueStr
 
 			List_extension[stringvalue] = true
-			fmt.Println(List_extension)
 		}
 	}
 
